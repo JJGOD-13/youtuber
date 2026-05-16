@@ -66,6 +66,7 @@ impl App {
 
     pub async fn execute_search(&mut self) -> () {
         self.clear_search_results();
+        self.state = AppState::Searching;
         if let Err(err) = self.search_youtube().await {
             self.state = AppState::Error(err);
         }
@@ -73,7 +74,6 @@ impl App {
     }
 
     pub async fn search_youtube(&mut self) -> Result<(), YoutubeSearchError> {
-        self.state = AppState::Loading;
         if self.user_search_input.value().is_empty() {
             return Err(YoutubeSearchError::EmptySearch);
         }

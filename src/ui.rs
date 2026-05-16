@@ -35,7 +35,7 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
 fn render_bottom_bar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
     let footer_chunks = Layout::new(
         Direction::Horizontal,
-        [Constraint::Percentage(90), Constraint::Percentage(10)],
+        [Constraint::Percentage(88), Constraint::Percentage(12)],
     )
     .split(chunks[2]);
 
@@ -57,7 +57,7 @@ fn render_bottom_bar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
     };
     let state_text = Paragraph::new(state_string)
         .style(Style::new().bold())
-        .right_aligned()
+        .centered()
         .block(bottom_bar);
 
     frame.render_widget(state_text, footer_chunks[1]);
