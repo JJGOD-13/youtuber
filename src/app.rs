@@ -3,12 +3,21 @@ use rustypipe::{
     client::RustyPipe,
     model::{YouTubeItem, traits::YtEntity},
 };
-use std::process::Command;
+use std::{
+    io::{self, ErrorKind},
+    process::{Command, Output},
+};
 use tui_input::Input;
 
 use crate::trace_dbg;
 
 const YT_BASE_URL: &str = r"https://www.youtube.com/watch?v=";
+
+#[derive(Debug, Clone)]
+pub enum VideoPlayer {
+    MPV,
+    IINA,
+}
 
 pub enum AppState {
     Main,
@@ -44,10 +53,13 @@ pub struct App {
     pub search_state: ListState,
     pub search_results: Vec<YoutubeResult>,
     client: RustyPipe,
+    player: VideoPlayer,
 }
 
 impl App {
     pub fn new() -> Self {
+        let player = find_player();
+
         Self {
             show_debug: true,
             debug_text: String::default(),
@@ -56,6 +68,7 @@ impl App {
             search_state: ListState::default(),
             search_results: Vec::new(),
             client: RustyPipe::new(), // Change this to use the `builder` eventually
+            player: player,
         }
     }
 
@@ -113,7 +126,21 @@ impl App {
         let url = YT_BASE_URL.to_string() + &selected_video.url;
 
         self.debug_text = "Launching video".to_string();
-        let status = Command::new("mpv").arg(url).output();
+
+        let mut status: Result<Output, io::Error> = Err(io::Error::new(
+            ErrorKind::NotFound,
+            "Could not load video player",
+        ));
+
+        match self.player {
+            VideoPlayer::MPV => {
+                status = Command::new("mpv").arg(url).output();
+            }
+            VideoPlayer::IINA => {
+                let args = vec!["-a", "IINA", &url];
+                status = Command::new("open").args(args).output();
+            }
+        }
 
         if let Ok(_) = status {
             self.debug_text = "Done Watching".to_string();
@@ -121,5 +148,13 @@ impl App {
         } else if let Err(err) = status {
             self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
         }
+    }
+}
+
+fn find_player() -> VideoPlayer {
+    if cfg!(target_os = "macos") {
+        VideoPlayer::IINA
+    } else {
+        VideoPlayer::MPV
     }
 }
