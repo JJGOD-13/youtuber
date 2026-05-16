@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 use rustypipe::{
     client::RustyPipe,
-    model::{traits::YtEntity, YouTubeItem},
+    model::{YouTubeItem, traits::YtEntity},
 };
 use std::process::Command;
 use tui_input::Input;
@@ -108,7 +108,7 @@ impl App {
         self.state = AppState::Loading;
         self.debug_text = "Searching for video".to_string();
 
-        let selected_video = self.search_results[self.search_state.offset()].clone();
+        let selected_video = self.search_results[self.search_state.selected().unwrap()].clone();
 
         let url = YT_BASE_URL.to_string() + &selected_video.url;
 
