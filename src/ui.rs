@@ -1,10 +1,10 @@
 use crate::app::{App, AppState};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{self, Color, Modifier, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Clear, List, Paragraph},
-    Frame,
 };
 use std::rc::Rc;
 
@@ -72,6 +72,15 @@ fn render_searchbar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
     let search_input = Paragraph::new(app.user_search_input.value())
         .style(style::Color::White)
         .block(search_bar);
+
+    // Set cursor blinking and position:
+    match app.state {
+        AppState::Searching => {
+            let x = app.user_search_input.visual_cursor() + 1;
+            frame.set_cursor_position((chunks[0].x + x as u16, chunks[0].y + 1));
+        }
+        _ => {}
+    }
 
     frame.render_widget(search_input, chunks[0]);
 }
