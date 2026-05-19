@@ -66,8 +66,10 @@ impl App {
         // Check that the player is actually available.
         which::which(player.to_string())?;
 
+        let show_debug = is_debug();
+
         Ok(Self {
-            show_debug: true,
+            show_debug,
             debug_text: String::default(),
             state: AppState::Main,
             user_search_input: Input::new("".into()),
@@ -154,6 +156,16 @@ impl App {
             self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
         }
     }
+}
+
+#[cfg(debug_assertions)]
+fn is_debug() -> bool {
+    true
+}
+
+#[cfg(not(debug_assertions))]
+fn is_debug() -> bool {
+    false
 }
 
 fn find_player() -> VideoPlayer {
