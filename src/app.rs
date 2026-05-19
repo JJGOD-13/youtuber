@@ -3,11 +3,7 @@ use rustypipe::{
     client::RustyPipe,
     model::{traits::YtEntity, YouTubeItem},
 };
-use std::{
-    fmt::Display,
-    io::{self, ErrorKind},
-    process::{Command, Output},
-};
+use std::{fmt::Display, process::Command};
 use tui_input::Input;
 
 const YT_BASE_URL: &str = r"https://www.youtube.com/watch?v=";
@@ -38,11 +34,11 @@ pub enum YoutubeSearchError {
     EmptySearch,
     NoResult,
 }
-impl YoutubeSearchError {
-    pub fn to_string(self) -> String {
+impl Display for YoutubeSearchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            YoutubeSearchError::EmptySearch => return "Empty Search!".to_string(),
-            YoutubeSearchError::NoResult => return "No Results Found!".to_string(),
+            YoutubeSearchError::EmptySearch => write!(f, "Empty Search!"),
+            YoutubeSearchError::NoResult => write!(f, "No Results Found!"),
         }
     }
 }
@@ -78,7 +74,7 @@ impl App {
             search_state: ListState::default(),
             search_results: Vec::new(),
             client: RustyPipe::new(), // Change this to use the `builder` eventually
-            player: player,
+            player,
         })
     }
 
@@ -142,22 +138,16 @@ impl App {
 
         self.debug_text = "Launching video".to_string();
 
-        let mut status: Result<Output, io::Error> = Err(io::Error::new(
-            ErrorKind::NotFound,
-            "Could not load video player",
-        ));
+        let status = match self.player {
+            VideoPlayer::Mpv => Command::new("mpv").arg(url).output(),
 
-        match self.player {
-            VideoPlayer::Mpv => {
-                status = Command::new("mpv").arg(url).output();
-            }
             VideoPlayer::Iina => {
                 let args = vec!["-a", "IINA", &url];
-                status = Command::new("open").args(args).output();
+                Command::new("open").args(args).output()
             }
-        }
+        };
 
-        if let Ok(_) = status {
+        if status.is_ok() {
             self.debug_text = "Done Watching".to_string();
             self.state = AppState::Main;
         } else if let Err(err) = status {

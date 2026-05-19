@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let response = match App::new() {
         Ok(mut app) => run_app(&mut terminal, &mut app).await,
-        Err(err) => Err(std::io::Error::new(
+        Err(_) => Err(std::io::Error::new(
             io::ErrorKind::NotFound,
             "Unable to find compatible player. Ensure 'mpv' or 'iina' are installed",
         )),
