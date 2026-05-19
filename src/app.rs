@@ -1,22 +1,29 @@
 use ratatui::widgets::ListState;
 use rustypipe::{
     client::RustyPipe,
-    model::{YouTubeItem, traits::YtEntity},
+    model::{traits::YtEntity, YouTubeItem},
 };
 use std::{
+    fmt::Display,
     io::{self, ErrorKind},
     process::{Command, Output},
 };
 use tui_input::Input;
 
-use crate::trace_dbg;
-
 const YT_BASE_URL: &str = r"https://www.youtube.com/watch?v=";
 
 #[derive(Debug, Clone)]
 pub enum VideoPlayer {
-    MPV,
-    IINA,
+    Mpv,
+    Iina,
+}
+impl Display for VideoPlayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VideoPlayer::Mpv => write!(f, "mpv"),
+            VideoPlayer::Iina => write!(f, "iina"),
+        }
+    }
 }
 
 pub enum AppState {
@@ -57,10 +64,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, which::Error> {
         let player = find_player();
 
-        Self {
+        // Check that the player is actually available.
+        which::which(player.to_string())?;
+
+        Ok(Self {
             show_debug: true,
             debug_text: String::default(),
             state: AppState::Main,
@@ -69,7 +79,7 @@ impl App {
             search_results: Vec::new(),
             client: RustyPipe::new(), // Change this to use the `builder` eventually
             player: player,
-        }
+        })
     }
 
     pub fn clear_search_results(&mut self) {
@@ -106,7 +116,6 @@ impl App {
         let results = results.items.items.iter();
         for result in results {
             if let YouTubeItem::Video(r) = result {
-                trace_dbg!(r);
                 self.search_results.push(YoutubeResult {
                     video_title: r.name().to_string(),
                     url: r.id().to_string(),
@@ -121,6 +130,12 @@ impl App {
         self.state = AppState::Loading;
         self.debug_text = "Searching for video".to_string();
 
+        let idx = self.search_state.selected();
+        if idx.is_none() {
+            self.debug_text = "Haven't selected a video".to_string();
+            self.state = AppState::Main;
+            return;
+        }
         let selected_video = self.search_results[self.search_state.selected().unwrap()].clone();
 
         let url = YT_BASE_URL.to_string() + &selected_video.url;
@@ -133,10 +148,10 @@ impl App {
         ));
 
         match self.player {
-            VideoPlayer::MPV => {
+            VideoPlayer::Mpv => {
                 status = Command::new("mpv").arg(url).output();
             }
-            VideoPlayer::IINA => {
+            VideoPlayer::Iina => {
                 let args = vec!["-a", "IINA", &url];
                 status = Command::new("open").args(args).output();
             }
@@ -153,8 +168,8 @@ impl App {
 
 fn find_player() -> VideoPlayer {
     if cfg!(target_os = "macos") {
-        VideoPlayer::IINA
+        VideoPlayer::Iina
     } else {
-        VideoPlayer::MPV
+        VideoPlayer::Mpv
     }
 }

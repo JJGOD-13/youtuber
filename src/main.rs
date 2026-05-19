@@ -1,5 +1,4 @@
 use app::{App, AppState};
-use logging::initialize_logging;
 use ratatui::{
     crossterm::{
         event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -13,22 +12,24 @@ use std::{error::Error, io};
 use tui_input::backend::crossterm::EventHandler;
 use ui::draw_ui;
 mod app;
-mod logging;
 mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    initialize_logging()?;
-    _ = enable_raw_mode();
+    enable_raw_mode()?;
     let mut stderr = io::stderr();
     execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)?;
 
-    trace_dbg!("Starting app");
-    let mut app = App::new();
-    let response = run_app(&mut terminal, &mut app).await;
+    let response = match App::new() {
+        Ok(mut app) => run_app(&mut terminal, &mut app).await,
+        Err(err) => Err(std::io::Error::new(
+            io::ErrorKind::NotFound,
+            "Unable to find compatible player. Ensure 'mpv' or 'iina' are installed",
+        )),
+    };
 
     disable_raw_mode()?;
     execute!(
