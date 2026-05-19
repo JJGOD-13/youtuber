@@ -1,7 +1,13 @@
 [package]
 name = "youtuber"
+repository = "https://github.com/JJGOD-13/youtuber"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+keywords = ["cli", "youtube", "ratatui"]
+include = ["src/"]
+readme = "README.md"
+
 
 [dependencies]
 ratatui = "0.30.0"
