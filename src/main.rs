@@ -42,7 +42,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let config = match fs::OpenOptions::new().read(true).open(&config_file_path) {
         Ok(mut f) => {
-            dbg!(&f);
             let mut buf = String::new();
             f.read_to_string(&mut buf).unwrap();
             let c: Config = serde_json::from_str(buf.as_str()).unwrap();
@@ -109,8 +108,12 @@ where
                 app::AppState::Main => match key.code {
                     KeyCode::Char('i') => app.state = AppState::Searching,
                     KeyCode::Char('q') => app.state = AppState::Exiting,
-                    KeyCode::Char('j') => app.search_state.select_next(),
-                    KeyCode::Char('k') => app.search_state.select_previous(),
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        app.search_state.select_next();
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        app.search_state.select_previous();
+                    }
                     KeyCode::Enter => app.try_launch_video().await,
                     _ => {}
                 },

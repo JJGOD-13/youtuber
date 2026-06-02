@@ -1,4 +1,7 @@
-use ratatui::widgets::ListState;
+use bytes::Bytes;
+use image::load_from_memory;
+use ratatui::{layout::Size, widgets::ListState};
+use ratatui_image::{picker::Picker, protocol::Protocol, FilterType::Nearest, Resize};
 use rustypipe::{
     client::RustyPipe,
     model::{traits::YtEntity, YouTubeItem},
@@ -45,10 +48,21 @@ impl Display for YoutubeSearchError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct YoutubeResult {
     pub video_title: String,
     pub url: String,
+    pub thumbnail: Option<Protocol>,
+}
+
+impl std::fmt::Debug for YoutubeResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("YoutubeResult")
+            .field("video_title", &self.video_title)
+            .field("url", &self.url)
+            .field("thumbnail", &self.url)
+            .finish()
+    }
 }
 pub struct App {
     pub show_debug: bool,
@@ -102,24 +116,34 @@ impl App {
             return Err(YoutubeSearchError::EmptySearch);
         }
 
-        let results: rustypipe::model::SearchResult<YouTubeItem> = self
+        let results: rustypipe::model::SearchResult<YouTubeItem> = match self
             .client
             .query()
             .search(&self.user_search_input.value())
             .await
-            .unwrap();
+        {
+            Ok(a) => a,
+            Err(_) => return Err(YoutubeSearchError::NoResult),
+        };
 
         if results.items.items.is_empty() {
             self.debug_text = format!("No results found {results:?}");
             return Err(YoutubeSearchError::NoResult);
         }
 
+        let picker = Picker::from_query_stdio().unwrap();
+        let font_size = picker.font_size();
         let results = results.items.items.iter();
         for result in results {
             if let YouTubeItem::Video(r) = result {
+                // Get the thumbnail bytes too.
+
+                let thumbnail_data = get_thumbnail_data(&picker, font_size, r).await;
+
                 self.search_results.push(YoutubeResult {
                     video_title: r.name().to_string(),
                     url: r.id().to_string(),
+                    thumbnail: thumbnail_data,
                 });
             }
         }
@@ -160,6 +184,33 @@ impl App {
             self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
         }
     }
+}
+
+async fn get_thumbnail_data(
+    picker: &Picker,
+    font_size: ratatui_image::FontSize,
+    r: &rustypipe::model::VideoItem,
+) -> Option<Protocol> {
+    if r.thumbnail.is_empty() {
+        return None;
+    }
+
+    let bytes = get_bytes_from_url(r.thumbnail[0].url.clone()).await;
+    let dyn_img = load_from_memory(&bytes).ok().unwrap();
+    let size = Size::new(
+        dyn_img.width().div_ceil(font_size.height as u32) as u16 * 4,
+        dyn_img.height().div_ceil(font_size.height as u32) as u16 * 4,
+    );
+
+    Some(
+        picker
+            .new_protocol(dyn_img, size, Resize::Fit(Some(Nearest)))
+            .unwrap(),
+    )
+}
+
+async fn get_bytes_from_url(clone: String) -> Bytes {
+    reqwest::get(clone).await.unwrap().bytes().await.unwrap()
 }
 
 #[cfg(debug_assertions)]
