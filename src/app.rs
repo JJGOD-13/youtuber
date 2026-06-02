@@ -121,6 +121,7 @@ impl App {
             }
         }
         self.debug_text = format!("Results Found! {0:?}", self.search_results);
+        self.search_state.select_first();
         Ok(())
     }
 
