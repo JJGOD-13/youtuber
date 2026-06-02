@@ -6,6 +6,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Clear, List, Padding, Paragraph},
 };
+use ratatui_image::{Image, protocol::Protocol};
 use std::rc::Rc;
 
 pub fn draw_ui(frame: &mut Frame, app: &mut App) {
@@ -18,6 +19,20 @@ pub fn draw_ui(frame: &mut Frame, app: &mut App) {
 }
 
 fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) {
+    let search_chunks = Layout::new(
+        Direction::Horizontal,
+        [Constraint::Percentage(50), Constraint::Percentage(50)],
+    )
+    .split(chunks[1]);
+
+    let thumbnails_block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::default());
+
+    let placeholder_text = Paragraph::new("Couldn't find a thumbnail")
+        .centered()
+        .block(thumbnails_block);
+
     let search_results_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default())
@@ -29,7 +44,24 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
         .highlight_symbol(">")
         .block(search_results_block);
 
-    frame.render_stateful_widget(list, chunks[1], &mut app.search_state);
+    let images: Vec<Option<Protocol>> = app
+        .search_results
+        .iter()
+        .map(|r| r.thumbnail.clone())
+        .collect();
+
+    frame.render_stateful_widget(list, search_chunks[0], &mut app.search_state);
+
+    if !images.is_empty() && let Some(index) = app.search_state.selected()            
+        && let Some(img) = &images[index]
+    {
+        
+        let thumbnail = Image::new(img);
+        frame.render_widget(thumbnail, search_chunks[1]);
+
+    } else if !app.search_results.is_empty() {
+        frame.render_widget(placeholder_text, search_chunks[1]);
+    }
 }
 
 fn render_bottom_bar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
@@ -76,19 +108,22 @@ fn render_searchbar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
     let search_bar = Block::default()
         .borders(Borders::ALL)
         .style(Style::default())
-        .title("Youtuber");
+        .title("Search");
 
-    let search_input = Paragraph::new(app.user_search_input.value())
-        .style(style::Color::White)
-        .block(search_bar);
+    let search_input = if !app.user_search_input.value().is_empty() {
+        Paragraph::new(app.user_search_input.value())
+            .style(style::Color::White)
+            .block(search_bar)
+    } else {
+        Paragraph::new(Text::styled("Enter Your Search", style::Color::DarkGray))
+            .style(style::Color::White)
+            .block(search_bar)
+    };
 
     // Set cursor blinking and position:
-    match app.state {
-        AppState::Searching => {
-            let x = app.user_search_input.visual_cursor() + 1;
-            frame.set_cursor_position((chunks[0].x + x as u16, chunks[0].y + 1));
-        }
-        _ => {}
+    if let AppState::Searching = app.state {
+        let x = app.user_search_input.visual_cursor() + 1;
+        frame.set_cursor_position((chunks[0].x + x as u16, chunks[0].y + 1));
     }
 
     frame.render_widget(search_input, chunks[0]);
