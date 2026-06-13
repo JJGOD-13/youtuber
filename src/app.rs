@@ -6,6 +6,8 @@ use rustypipe::{
 use std::{fmt::Display, process::Command};
 use tui_input::Input;
 
+use crate::Config;
+
 const YT_BASE_URL: &str = r"https://www.youtube.com/watch?v=";
 
 #[derive(Debug, Clone)]
@@ -56,15 +58,16 @@ pub struct App {
     pub search_state: ListState,
     pub search_results: Vec<YoutubeResult>,
     client: RustyPipe,
-    player: VideoPlayer,
+    pub player: VideoPlayer,
 }
 
 impl App {
-    pub fn new() -> Result<Self, which::Error> {
-        let player = find_player();
-
-        // Check that the player is actually available.
-        which::which(player.to_string())?;
+    pub fn with_config(config: Config) -> Result<Self, which::Error> {
+        let player = match config.player.to_lowercase().as_str() {
+            "iina" => VideoPlayer::Iina,
+            "mpv" => VideoPlayer::Mpv,
+            _ => find_player(),
+        };
 
         let show_debug = is_debug();
 

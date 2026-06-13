@@ -8,14 +8,60 @@ use ratatui::{
     prelude::{Backend, CrosstermBackend},
     Terminal,
 };
-use std::{error::Error, io};
+use std::{
+    error::Error,
+    fs::{self},
+    io::{self, Read, Write},
+    path::Path,
+};
 use tui_input::backend::crossterm::EventHandler;
 use ui::draw_ui;
 mod app;
 mod ui;
 
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Config {
+    player: String,
+}
+impl Config {
+    fn new() -> Self {
+        Self {
+            player: String::from("iina"),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // Read/setup config file if it exists.
+    let home = std::env::home_dir().unwrap_or_default();
+    let config_file_root = Path::join(home.as_path(), Path::new(".config/youtuber/"));
+    let config_file_path = Path::join(&config_file_root, "config.json");
+
+    fs::create_dir_all(&config_file_root)?;
+
+    let config = match fs::OpenOptions::new().read(true).open(&config_file_path) {
+        Ok(mut f) => {
+            dbg!(&f);
+            let mut buf = String::new();
+            f.read_to_string(&mut buf).unwrap();
+            let c: Config = serde_json::from_str(buf.as_str()).unwrap();
+            c
+        }
+        Err(_) => {
+            // file doesn't exist, so we can write to it
+            let c = Config::new();
+            let buf = serde_json::to_string(&c).unwrap();
+            _ = fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&config_file_path)
+                .unwrap()
+                .write(buf.as_bytes());
+            c
+        }
+    };
     enable_raw_mode()?;
     let mut stderr = io::stderr();
     execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;
@@ -23,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)?;
 
-    let response = match App::new() {
+    let response = match App::with_config(config) {
         Ok(mut app) => run_app(&mut terminal, &mut app).await,
         Err(_) => Err(std::io::Error::new(
             io::ErrorKind::NotFound,
