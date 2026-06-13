@@ -2,7 +2,7 @@
 name = "youtuber"
 description = "A CLI to search for and watch YouTube through the terminal"
 repository = "https://github.com/JJGOD-13/youtuber"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 keywords = ["cli", "youtube", "ratatui"]
