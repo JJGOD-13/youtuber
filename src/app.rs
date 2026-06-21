@@ -1,10 +1,10 @@
 use bytes::Bytes;
 use image::load_from_memory;
 use ratatui::{layout::Size, widgets::ListState};
-use ratatui_image::{picker::Picker, protocol::Protocol, FilterType::Nearest, Resize};
+use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
 use rustypipe::{
     client::RustyPipe,
-    model::{traits::YtEntity, YouTubeItem},
+    model::{YouTubeItem, traits::YtEntity},
 };
 use std::{fmt::Display, process::Command};
 use tui_input::Input;
@@ -198,8 +198,8 @@ async fn get_thumbnail_data(
     let bytes = get_bytes_from_url(r.thumbnail[0].url.clone()).await;
     let dyn_img = load_from_memory(&bytes).ok().unwrap();
     let size = Size::new(
-        dyn_img.width().div_ceil(font_size.height as u32) as u16 * 4,
-        dyn_img.height().div_ceil(font_size.height as u32) as u16 * 4,
+        dyn_img.width().div_ceil(font_size.width as u32) as u16 * 100,
+        dyn_img.height().div_ceil(font_size.height as u32) as u16 * 100,
     );
 
     Some(

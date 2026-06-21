@@ -29,10 +29,6 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
         .borders(Borders::ALL)
         .style(Style::default());
 
-    let placeholder_text = Paragraph::new("Couldn't find a thumbnail")
-        .centered()
-        .block(thumbnails_block);
-
     let search_results_block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default())
@@ -52,14 +48,19 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
 
     frame.render_stateful_widget(list, search_chunks[0], &mut app.search_state);
 
-    if !images.is_empty() && let Some(index) = app.search_state.selected()            
+    if !images.is_empty()
+        && let Some(index) = app.search_state.selected()
         && let Some(img) = &images[index]
     {
-        
         let thumbnail = Image::new(img);
         frame.render_widget(thumbnail, search_chunks[1]);
-
     } else if !app.search_results.is_empty() {
+        let placeholder_text = Paragraph::new("Couldn't find a thumbnail")
+            .centered()
+            .block(thumbnails_block);
+        frame.render_widget(placeholder_text, search_chunks[1]);
+    } else {
+        let placeholder_text = Paragraph::new("").centered().block(thumbnails_block);
         frame.render_widget(placeholder_text, search_chunks[1]);
     }
 }
