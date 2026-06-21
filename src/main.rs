@@ -125,6 +125,7 @@ where
                 },
                 app::AppState::Searching => match key.code {
                     KeyCode::Esc => app.state = AppState::Main,
+                    KeyCode::Char('q') => app.state = AppState::Exiting,
                     KeyCode::Enter => app.execute_search().await,
                     _ => {
                         app.user_search_input.handle_event(&event);
