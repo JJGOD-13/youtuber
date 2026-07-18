@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{self, Color, Modifier, Style},
     text::{Line, Text},
-    widgets::{Block, Borders, Clear, List, Paragraph},
+    widgets::{Block, Borders, Clear, List, Padding, Paragraph},
 };
 use std::rc::Rc;
 
@@ -42,9 +42,17 @@ fn render_bottom_bar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
     if app.show_debug {
         let debug_text = Text::from(app.debug_text.clone()).style(Style::new().fg(Color::White));
         frame.render_widget(debug_text, footer_chunks[0]);
+    } else {
+        let help_text = Text::from("[i -> Search for video] [j/k -> Navigate results] [enter -> Select video] [q -> quit] ").style(Style::new().fg(Color::DarkGray));
+        frame.render_widget(help_text, footer_chunks[0]);
     }
 
-    let bottom_bar = Block::default().borders(Borders::ALL);
+    let bottom_bar = Block::default().padding(Padding {
+        left: 0,
+        right: 1,
+        top: 0,
+        bottom: 0,
+    });
 
     let state_string = match &app.state {
         AppState::Main => Line::from("Normal").style(Style::new().fg(Color::White)),
@@ -55,9 +63,10 @@ fn render_bottom_bar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
             Line::from(youtube_search_error.clone().to_string()).style(Style::new().fg(Color::Red))
         }
     };
+
     let state_text = Paragraph::new(state_string)
         .style(Style::new().bold())
-        .centered()
+        .right_aligned()
         .block(bottom_bar);
 
     frame.render_widget(state_text, footer_chunks[1]);
@@ -88,15 +97,17 @@ fn render_searchbar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
 fn render_exit_popup(frame: &mut Frame<'_>, app: &App) {
     if let AppState::Exiting = app.state {
         frame.render_widget(Clear, frame.area());
-        let popup_block = Block::default()
-            .title("Y/N")
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
 
-        let exit_text = Paragraph::new("Would you like to exit? (Y/N)").block(popup_block);
+        let raw_text = Text::raw("Would you like to exit? (Y/N)");
+        let exit_text = Paragraph::new(raw_text.clone())
+            .block(Block::bordered())
+            .centered();
 
-        let area = centered_rect(60, 25, frame.area());
-        frame.render_widget(exit_text, area);
+        let centered_rect = frame
+            .area()
+            .centered(Constraint::Percentage(20), Constraint::Length(3));
+
+        frame.render_widget(exit_text, centered_rect);
     }
 }
 
@@ -106,27 +117,7 @@ fn define_ui_outline(frame: &Frame) -> Rc<[Rect]> {
         .constraints([
             Constraint::Percentage(5),
             Constraint::Fill(1),
-            Constraint::Length(3),
+            Constraint::Percentage(5),
         ])
         .split(frame.area())
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let middle_vertical_chunk = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(middle_vertical_chunk[1])[1]
 }
