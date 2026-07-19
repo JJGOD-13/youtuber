@@ -6,7 +6,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, Borders, Clear, List, Padding, Paragraph},
 };
-use ratatui_image::{Image, protocol::Protocol};
+use ratatui_image::{Image, picker::Picker, protocol::Protocol};
 use std::rc::Rc;
 
 pub fn draw_ui(frame: &mut Frame, app: &mut App) {
@@ -141,7 +141,7 @@ fn render_exit_popup(frame: &mut Frame<'_>, app: &App) {
 
         let centered_rect = frame
             .area()
-            .centered(Constraint::Percentage(20), Constraint::Length(3));
+            .centered(Constraint::Percentage(40), Constraint::Length(3));
 
         frame.render_widget(exit_text, centered_rect);
     }
@@ -151,7 +151,7 @@ fn define_ui_outline(frame: &Frame) -> Rc<[Rect]> {
     Layout::default()
         .direction(ratatui::layout::Direction::Vertical)
         .constraints([
-            Constraint::Percentage(5),
+            Constraint::Length(3),
             Constraint::Fill(1),
             Constraint::Percentage(5),
         ])
