@@ -1,10 +1,10 @@
 use bytes::Bytes;
 use image::load_from_memory;
 use ratatui::{layout::Size, widgets::ListState};
-use ratatui_image::{FilterType::Nearest, Resize, picker::Picker, protocol::Protocol};
+use ratatui_image::{picker::Picker, protocol::Protocol, Resize};
 use rustypipe::{
     client::RustyPipe,
-    model::{YouTubeItem, traits::YtEntity},
+    model::{traits::YtEntity, SearchResult, VideoItem, YouTubeItem},
 };
 use std::{fmt::Display, process::Command};
 use tui_input::Input;
@@ -116,7 +116,7 @@ impl App {
             return Err(YoutubeSearchError::EmptySearch);
         }
 
-        let results: rustypipe::model::SearchResult<YouTubeItem> = match self
+        let results: SearchResult<YouTubeItem> = match self
             .client
             .query()
             .search(&self.user_search_input.value())
@@ -132,13 +132,12 @@ impl App {
         }
 
         let picker = Picker::from_query_stdio().unwrap();
-        let font_size = picker.font_size();
-        let results = results.items.items.iter();
+        let results = results.items.items[0..10].iter();
         for result in results {
             if let YouTubeItem::Video(r) = result {
                 // Get the thumbnail bytes too.
 
-                let thumbnail_data = get_thumbnail_data(&picker, font_size, r).await;
+                let thumbnail_data = get_thumbnail_data(&picker, r).await;
 
                 self.search_results.push(YoutubeResult {
                     video_title: r.name().to_string(),
@@ -186,25 +185,18 @@ impl App {
     }
 }
 
-async fn get_thumbnail_data(
-    picker: &Picker,
-    font_size: ratatui_image::FontSize,
-    r: &rustypipe::model::VideoItem,
-) -> Option<Protocol> {
+async fn get_thumbnail_data(picker: &Picker, r: &VideoItem) -> Option<Protocol> {
     if r.thumbnail.is_empty() {
         return None;
     }
 
     let bytes = get_bytes_from_url(r.thumbnail[0].url.clone()).await;
     let dyn_img = load_from_memory(&bytes).ok().unwrap();
-    let size = Size::new(
-        dyn_img.width().div_ceil(font_size.width as u32) as u16 * 100,
-        dyn_img.height().div_ceil(font_size.height as u32) as u16 * 100,
-    );
+    let size = Size::new(300, 200);
 
     Some(
         picker
-            .new_protocol(dyn_img, size, Resize::Fit(Some(Nearest)))
+            .new_protocol(dyn_img, size, Resize::Fit(None))
             .unwrap(),
     )
 }

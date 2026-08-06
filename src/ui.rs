@@ -1,12 +1,12 @@
 use crate::app::{App, AppState};
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{self, Color, Modifier, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Clear, List, Padding, Paragraph},
+    Frame,
 };
-use ratatui_image::{Image, picker::Picker, protocol::Protocol};
+use ratatui_image::{protocol::Protocol, Image};
 use std::rc::Rc;
 
 pub fn draw_ui(frame: &mut Frame, app: &mut App) {
