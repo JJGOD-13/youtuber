@@ -177,7 +177,7 @@ impl App {
         };
 
         if status.is_ok() {
-            self.debug_text = "Done Watching".to_string();
+            self.debug_text = String::new();
             self.state = AppState::Main;
         } else if let Err(err) = status {
             self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
@@ -205,13 +205,10 @@ async fn get_bytes_from_url(clone: String) -> Bytes {
     reqwest::get(clone).await.unwrap().bytes().await.unwrap()
 }
 
-#[cfg(debug_assertions)]
 fn is_debug() -> bool {
-    true
-}
-
-#[cfg(not(debug_assertions))]
-fn is_debug() -> bool {
+    if cfg!(debug_assertions) {
+        return true;
+    }
     false
 }
 
