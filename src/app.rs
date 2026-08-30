@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use futures::future::join_all;
 use image::load_from_memory;
 use ratatui::{layout::Size, widgets::ListState};
 use ratatui_image::{picker::Picker, protocol::Protocol, Resize};
@@ -73,6 +74,8 @@ pub struct App {
     pub search_results: Vec<YoutubeResult>,
     client: RustyPipe,
     pub player: VideoPlayer,
+    http_client: reqwest::Client,
+    picker: Picker,
 }
 
 impl App {
@@ -84,6 +87,7 @@ impl App {
         };
 
         let show_debug = is_debug();
+        let picker = Picker::from_query_stdio().unwrap();
 
         Ok(Self {
             show_debug,
@@ -94,6 +98,8 @@ impl App {
             search_results: Vec::new(),
             client: RustyPipe::new(), // Change this to use the `builder` eventually
             player,
+            http_client: reqwest::Client::new(),
+            picker,
         })
     }
 
@@ -116,34 +122,43 @@ impl App {
             return Err(YoutubeSearchError::EmptySearch);
         }
 
-        let results: SearchResult<YouTubeItem> = match self
+        let results: SearchResult<YouTubeItem> = self
             .client
             .query()
             .search(&self.user_search_input.value())
             .await
-        {
-            Ok(a) => a,
-            Err(_) => return Err(YoutubeSearchError::NoResult),
-        };
+            .map_err(|_| YoutubeSearchError::NoResult)?;
 
         if results.items.items.is_empty() {
             self.debug_text = format!("No results found {results:?}");
             return Err(YoutubeSearchError::NoResult);
         }
 
-        let picker = Picker::from_query_stdio().unwrap();
-        let results = results.items.items[0..10].iter();
-        for result in results {
-            if let YouTubeItem::Video(r) = result {
-                // Get the thumbnail bytes too.
+        let results: Vec<&VideoItem> = results
+            .items
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                YouTubeItem::Video(v) => Some(v),
+                _ => None,
+            })
+            .collect();
 
-                self.search_results.push(YoutubeResult {
-                    video_title: r.name().to_string(),
-                    url: r.id().to_string(),
-                    thumbnail: get_thumbnail_data(&picker, r).await,
-                });
-            }
-        }
+        let thumbnail_futures = results
+            .iter()
+            .map(|v| get_thumbnail_data(&self.picker, &self.http_client, v));
+        let thumbnails = join_all(thumbnail_futures).await;
+
+        self.search_results = results
+            .into_iter()
+            .zip(thumbnails)
+            .map(|(r, thumbnail)| YoutubeResult {
+                video_title: r.name().to_string(),
+                url: r.id().to_string(),
+                thumbnail,
+            })
+            .collect();
+
         self.debug_text = format!("Results Found! {0:?}", self.search_results);
         self.search_state.select_first();
         Ok(())
@@ -183,14 +198,19 @@ impl App {
     }
 }
 
-async fn get_thumbnail_data(picker: &Picker, r: &VideoItem) -> Option<Protocol> {
-    if r.thumbnail.is_empty() {
+async fn get_thumbnail_data(
+    picker: &Picker,
+    client: &reqwest::Client,
+    v: &VideoItem,
+) -> Option<Protocol> {
+    if v.thumbnail.is_empty() {
         return None;
     }
 
-    let bytes = get_bytes_from_url(r.thumbnail[0].url.clone()).await;
+    let t = v.thumbnail.first()?;
+    let bytes = get_bytes_from_url(client, &t.url).await.ok()?;
     let dyn_img = load_from_memory(&bytes).ok().unwrap();
-    let size = Size::new(r.thumbnail[0].width as u16, r.thumbnail[0].height as u16);
+    let size = Size::new(v.thumbnail[0].width as u16, v.thumbnail[0].height as u16);
 
     Some(
         picker
@@ -199,8 +219,8 @@ async fn get_thumbnail_data(picker: &Picker, r: &VideoItem) -> Option<Protocol> 
     )
 }
 
-async fn get_bytes_from_url(clone: String) -> Bytes {
-    reqwest::get(clone).await.unwrap().bytes().await.unwrap()
+async fn get_bytes_from_url(client: &reqwest::Client, url: &str) -> Result<Bytes, reqwest::Error> {
+    client.get(url).send().await?.bytes().await
 }
 
 fn is_debug() -> bool {
