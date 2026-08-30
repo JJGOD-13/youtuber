@@ -137,12 +137,10 @@ impl App {
             if let YouTubeItem::Video(r) = result {
                 // Get the thumbnail bytes too.
 
-                let thumbnail_data = get_thumbnail_data(&picker, r).await;
-
                 self.search_results.push(YoutubeResult {
                     video_title: r.name().to_string(),
                     url: r.id().to_string(),
-                    thumbnail: thumbnail_data,
+                    thumbnail: get_thumbnail_data(&picker, r).await,
                 });
             }
         }
@@ -192,7 +190,7 @@ async fn get_thumbnail_data(picker: &Picker, r: &VideoItem) -> Option<Protocol> 
 
     let bytes = get_bytes_from_url(r.thumbnail[0].url.clone()).await;
     let dyn_img = load_from_memory(&bytes).ok().unwrap();
-    let size = Size::new(300, 200);
+    let size = Size::new(r.thumbnail[0].width as u16, r.thumbnail[0].height as u16);
 
     Some(
         picker
