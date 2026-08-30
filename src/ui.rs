@@ -24,10 +24,9 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
         [Constraint::Percentage(50), Constraint::Percentage(50)],
     )
     .split(chunks[1]);
-
-    let thumbnails_block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default());
+    let thumbnail_block = Block::bordered();
+    let thumbnail_inner_area = thumbnail_block.inner(search_chunks[1]);
+    frame.render_widget(&thumbnail_block, search_chunks[1]);
 
     let search_results_block = Block::default()
         .borders(Borders::ALL)
@@ -40,28 +39,24 @@ fn render_search_results(frame: &mut Frame<'_>, app: &mut App, chunks: &[Rect]) 
         .highlight_symbol(">")
         .block(search_results_block);
 
-    let images: Vec<Option<Protocol>> = app
-        .search_results
-        .iter()
-        .map(|r| r.thumbnail.clone())
-        .collect();
-
     frame.render_stateful_widget(list, search_chunks[0], &mut app.search_state);
 
-    if !images.is_empty()
-        && let Some(index) = app.search_state.selected()
-        && let Some(img) = &images[index]
-    {
-        let thumbnail = Image::new(img);
-        frame.render_widget(thumbnail, search_chunks[1]);
-    } else if !app.search_results.is_empty() {
-        let placeholder_text = Paragraph::new("Couldn't find a thumbnail")
-            .centered()
-            .block(thumbnails_block);
-        frame.render_widget(placeholder_text, search_chunks[1]);
-    } else {
-        let placeholder_text = Paragraph::new("").centered().block(thumbnails_block);
-        frame.render_widget(placeholder_text, search_chunks[1]);
+    let selected_thumbnail = app
+        .search_state
+        .selected()
+        .and_then(|index| app.search_results.get(index))
+        .and_then(|r| r.thumbnail.as_ref());
+
+    match selected_thumbnail {
+        Some(img) => {
+            let thumbnail = Image::new(img);
+            frame.render_widget(thumbnail, thumbnail_inner_area);
+        }
+        None if !app.search_results.is_empty() => {
+            let placeholder = Paragraph::new("Couldn't find a thumbnail!").centered();
+            frame.render_widget(placeholder, thumbnail_inner_area);
+        }
+        None => {}
     }
 }
 
