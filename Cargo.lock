@@ -4714,6 +4714,7 @@ dependencies = [
 name = "youtuber"
 version = "0.3.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "color-eyre",
  "directories",
@@ -4726,6 +4727,7 @@ dependencies = [
  "rustypipe",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-error",
