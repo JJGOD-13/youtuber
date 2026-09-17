@@ -1,12 +1,12 @@
 use app::{App, AppState};
 use ratatui::{
+    Terminal,
     crossterm::{
         event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
         execute,
-        terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
     },
     prelude::{Backend, CrosstermBackend},
-    Terminal,
 };
 use std::{
     error::Error,
@@ -19,7 +19,7 @@ use ui::draw_ui;
 mod app;
 mod ui;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 struct Config {
     player: String,
 }
@@ -40,27 +40,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     fs::create_dir_all(&config_file_root)?;
 
-    let config = match fs::OpenOptions::new().read(true).open(&config_file_path) {
-        Ok(mut f) => {
-            let mut buf = String::new();
-            f.read_to_string(&mut buf).unwrap();
-            let c: Config = serde_json::from_str(buf.as_str()).unwrap();
-            c
-        }
-        Err(_) => {
-            // file doesn't exist, so we can write to it
-            let c = Config::new();
-            let buf = serde_json::to_string(&c).unwrap();
-            _ = fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(&config_file_path)
-                .unwrap()
-                .write(buf.as_bytes());
-            c
-        }
-    };
+    let config = fs::OpenOptions::new()
+        .read(true)
+        .open(&config_file_path)
+        .map_or_else(
+            |_| {
+                // File doesn't exist, so we can write to it
+                let c = Config::new();
+                let buf = serde_json::to_string(&c).unwrap_or_default();
+                if let Ok(mut f) = fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .open(&config_file_path)
+                {
+                    let _ = f.write_all(buf.as_bytes());
+                }
+                c
+            },
+            |mut f| {
+                let mut buf = String::new();
+                f.read_to_string(&mut buf).unwrap_or_default();
+                let c: Config = serde_json::from_str(buf.as_str()).unwrap_or_default();
+                c
+            },
+        );
     enable_raw_mode()?;
     let mut stderr = io::stderr();
     execute!(stderr, EnterAlternateScreen, EnableMouseCapture)?;
@@ -68,13 +72,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)?;
 
-    let response = match App::with_config(config) {
-        Ok(mut app) => run_app(&mut terminal, &mut app).await,
-        Err(_) => Err(std::io::Error::new(
-            io::ErrorKind::NotFound,
-            "Unable to find compatible player. Ensure 'mpv' or 'iina' are installed",
-        )),
-    };
+    if let Ok(mut app) = App::with_config(&config) {
+        let _ = run_app(&mut terminal, &mut app).await;
+    }
 
     disable_raw_mode()?;
     execute!(
@@ -84,9 +84,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     )?;
     terminal.show_cursor()?;
 
-    if let Err(err) = response {
-        println!("{err:?}")
-    }
     Ok(())
 }
 
@@ -114,13 +111,13 @@ where
                     KeyCode::Char('k') | KeyCode::Up => {
                         app.search_state.select_previous();
                     }
-                    KeyCode::Enter => app.try_launch_video().await,
+                    KeyCode::Enter => app.launch_video(),
                     _ => {}
                 },
                 // Return from the application with okay of error values
                 app::AppState::Exiting => match key.code {
                     KeyCode::Char('n') | KeyCode::Esc => app.state = AppState::Main,
-                    KeyCode::Char('y') | KeyCode::Char('q') => return Ok(true),
+                    KeyCode::Char('y' | 'q') => return Ok(true),
                     _ => {}
                 },
                 app::AppState::Searching => match key.code {
@@ -137,7 +134,7 @@ where
                 },
                 app::AppState::Error(err) => match err {
                     app::YoutubeSearchError::EmptySearch => {
-                        app.state = AppState::Error(err.clone())
+                        app.state = AppState::Error(err.clone());
                     }
                     app::YoutubeSearchError::NoResult => app.state = AppState::Error(err.clone()),
                 },

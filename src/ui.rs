@@ -1,10 +1,11 @@
+#![allow(clippy::arithmetic_side_effects)]
 use crate::app::{App, AppState};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{self, Color, Modifier, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Clear, List, Padding, Paragraph},
-    Frame,
 };
 use ratatui_image::Image;
 use std::rc::Rc;
@@ -106,27 +107,27 @@ fn render_searchbar(frame: &mut Frame<'_>, app: &App, chunks: &Rc<[Rect]>) {
         .style(Style::default())
         .title("Search");
 
-    let search_input = if !app.user_search_input.value().is_empty() {
-        Paragraph::new(app.user_search_input.value())
+    let search_input = if app.user_search_input.value().is_empty() {
+        Paragraph::new(Text::styled("Enter Your Search", style::Color::DarkGray))
             .style(style::Color::White)
             .block(search_bar)
     } else {
-        Paragraph::new(Text::styled("Enter Your Search", style::Color::DarkGray))
+        Paragraph::new(app.user_search_input.value())
             .style(style::Color::White)
             .block(search_bar)
     };
 
     // Set cursor blinking and position:
-    if let AppState::Searching = app.state {
-        let x = app.user_search_input.visual_cursor() + 1;
-        frame.set_cursor_position((chunks[0].x + x as u16, chunks[0].y + 1));
+    if matches!(app.state, AppState::Searching) {
+        let x = u16::try_from(app.user_search_input.visual_cursor() + 1).unwrap_or_default();
+        frame.set_cursor_position((chunks[0].x + x, chunks[0].y + 1));
     }
 
     frame.render_widget(search_input, chunks[0]);
 }
 
 fn render_exit_popup(frame: &mut Frame<'_>, app: &App) {
-    if let AppState::Exiting = app.state {
+    if matches!(app.state, AppState::Exiting) {
         frame.render_widget(Clear, frame.area());
 
         let raw_text = Text::raw("Would you like to exit? (Y/N)");

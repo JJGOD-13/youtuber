@@ -1,13 +1,15 @@
+use anyhow::anyhow;
 use bytes::Bytes;
 use futures::future::join_all;
 use image::load_from_memory;
 use ratatui::{layout::Size, widgets::ListState};
-use ratatui_image::{picker::Picker, protocol::Protocol, Resize};
+use ratatui_image::{Resize, picker::Picker, protocol::Protocol};
 use rustypipe::{
     client::RustyPipe,
-    model::{traits::YtEntity, SearchResult, VideoItem, YouTubeItem},
+    model::{SearchResult, VideoItem, YouTubeItem, traits::YtEntity},
 };
 use std::{fmt::Display, process::Command};
+use thiserror::Error;
 use tui_input::Input;
 
 use crate::Config;
@@ -22,8 +24,8 @@ pub enum VideoPlayer {
 impl Display for VideoPlayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VideoPlayer::Mpv => write!(f, "mpv"),
-            VideoPlayer::Iina => write!(f, "iina"),
+            Self::Mpv => write!(f, "mpv"),
+            Self::Iina => write!(f, "iina"),
         }
     }
 }
@@ -35,18 +37,13 @@ pub enum AppState {
     Searching,
     Loading,
 }
-#[derive(Debug, Clone)]
+
+#[derive(Error, Debug, Clone)]
 pub enum YoutubeSearchError {
+    #[error("Empty Search!")]
     EmptySearch,
+    #[error("No Results Found!")]
     NoResult,
-}
-impl Display for YoutubeSearchError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            YoutubeSearchError::EmptySearch => write!(f, "Empty Search!"),
-            YoutubeSearchError::NoResult => write!(f, "No Results Found!"),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -79,7 +76,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn with_config(config: Config) -> Result<Self, which::Error> {
+    pub fn with_config(config: &Config) -> anyhow::Result<Self> {
         let player = match config.player.to_lowercase().as_str() {
             "iina" => VideoPlayer::Iina,
             "mpv" => VideoPlayer::Mpv,
@@ -87,20 +84,22 @@ impl App {
         };
 
         let show_debug = is_debug();
-        let picker = Picker::from_query_stdio().unwrap();
+        match Picker::from_query_stdio() {
+            Ok(picker) => Ok(Self {
+                show_debug,
+                debug_text: String::default(),
+                state: AppState::Main,
+                user_search_input: Input::new(String::new()),
+                search_state: ListState::default(),
+                search_results: Vec::new(),
+                client: RustyPipe::new(), // Change this to use the `builder` eventually
+                player,
+                http_client: reqwest::Client::new(),
+                picker,
+            }),
 
-        Ok(Self {
-            show_debug,
-            debug_text: String::default(),
-            state: AppState::Main,
-            user_search_input: Input::new("".into()),
-            search_state: ListState::default(),
-            search_results: Vec::new(),
-            client: RustyPipe::new(), // Change this to use the `builder` eventually
-            player,
-            http_client: reqwest::Client::new(),
-            picker,
-        })
+            Err(err) => Err(anyhow!("Unable to make app {err}")),
+        }
     }
 
     pub fn clear_search_results(&mut self) {
@@ -164,7 +163,7 @@ impl App {
         Ok(())
     }
 
-    pub async fn try_launch_video(&mut self) -> () {
+    pub fn launch_video(&mut self) {
         self.state = AppState::Loading;
         self.debug_text = "Searching for video".to_string();
 
@@ -174,26 +173,25 @@ impl App {
             self.state = AppState::Main;
             return;
         }
-        let selected_video = self.search_results[self.search_state.selected().unwrap()].clone();
+        if let Some(selected) = self.search_state.selected() {
+            let selected_video = self.search_results[selected].clone();
+            let url = YT_BASE_URL.to_string() + &selected_video.url;
 
-        let url = YT_BASE_URL.to_string() + &selected_video.url;
+            self.debug_text = "Launching video".to_string();
+            let status = match self.player {
+                VideoPlayer::Mpv => Command::new("mpv").arg(url).output(),
 
-        self.debug_text = "Launching video".to_string();
-
-        let status = match self.player {
-            VideoPlayer::Mpv => Command::new("mpv").arg(url).output(),
-
-            VideoPlayer::Iina => {
-                let args = vec!["-a", "IINA", &url];
-                Command::new("open").args(args).output()
+                VideoPlayer::Iina => {
+                    let args = vec!["-a", "IINA", &url];
+                    Command::new("open").args(args).output()
+                }
+            };
+            if status.is_ok() {
+                self.debug_text = String::new();
+                self.state = AppState::Main;
+            } else if let Err(err) = status {
+                self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
             }
-        };
-
-        if status.is_ok() {
-            self.debug_text = String::new();
-            self.state = AppState::Main;
-        } else if let Err(err) = status {
-            self.debug_text = format!("SOMETHING WENT WRONG WITH MPV {err}");
         }
     }
 }
@@ -209,28 +207,32 @@ async fn get_thumbnail_data(
 
     let t = v.thumbnail.first()?;
     let bytes = get_bytes_from_url(client, &t.url).await.ok()?;
-    let dyn_img = load_from_memory(&bytes).ok().unwrap();
-    let size = Size::new(v.thumbnail[0].width as u16, v.thumbnail[0].height as u16);
+    let dyn_img = load_from_memory(&bytes).unwrap_or_default();
 
-    Some(
-        picker
-            .new_protocol(dyn_img, size, Resize::Fit(None))
-            .unwrap(),
-    )
+    let width = v.thumbnail.first().map_or_else(u16::default, |thumbnail| {
+        u16::try_from(thumbnail.width).unwrap_or_default()
+    });
+    let height = v.thumbnail.first().map_or_else(u16::default, |thumbnail| {
+        u16::try_from(thumbnail.height).unwrap_or_default()
+    });
+
+    let size = Size::new(width, height);
+
+    picker.new_protocol(dyn_img, size, Resize::Fit(None)).ok()
 }
 
 async fn get_bytes_from_url(client: &reqwest::Client, url: &str) -> Result<Bytes, reqwest::Error> {
     client.get(url).send().await?.bytes().await
 }
 
-fn is_debug() -> bool {
+const fn is_debug() -> bool {
     if cfg!(debug_assertions) {
         return true;
     }
     false
 }
 
-fn find_player() -> VideoPlayer {
+const fn find_player() -> VideoPlayer {
     if cfg!(target_os = "macos") {
         VideoPlayer::Iina
     } else {
