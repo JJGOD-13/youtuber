@@ -29,3 +29,20 @@ directories = "6.0.0"
 lazy_static = "1.5.0"
 color-eyre = "0.6.5"
 which = "8.0.2"
+
+[lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+index_slicing = "deny"
+arithmetic_side_effects = "deny"
+unreachable = "deny"
+unimplemneted = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+as_conversions = "deny"
