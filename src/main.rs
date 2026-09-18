@@ -117,7 +117,10 @@ where
                 // Return from the application with okay of error values
                 app::AppState::Exiting => match key.code {
                     KeyCode::Char('n') | KeyCode::Esc => app.state = AppState::Main,
-                    KeyCode::Char('y' | 'q') => return Ok(true),
+                    KeyCode::Char('y' | 'q') => {
+                        cleanup_trash();
+                        return Ok(true);
+                    }
                     _ => {}
                 },
                 app::AppState::Searching => match key.code {
@@ -140,5 +143,14 @@ where
                 },
             }
         }
+    }
+}
+
+fn cleanup_trash() {
+    let curr_dir = std::env::current_dir().unwrap_or_default();
+    let json_file = Path::join(&curr_dir, "rustypipe_cache.json");
+    // Scan for `rustypipe.json`
+    if fs::exists(&json_file).unwrap_or(false) {
+        let _ = fs::remove_file(json_file);
     }
 }
